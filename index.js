@@ -1,5 +1,4 @@
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
-import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js';
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 
 // Inicializar el servidor MCP
@@ -8,17 +7,17 @@ const server = new Server(
   { capabilities: { tools: {} } }
 );
 
-// Definir las herramientas que Claude podrá usar
+// Registrar las herramientas que utilizará Claude
 server.setRequestHandler(ListToolsRequestSchema, async () => {
   return {
     tools: [
       {
         name: 'get_figma_file',
-        description: 'Obtiene los detalles y nodos de un archivo de Figma Make',
+        description: 'Obtiene los datos y nodos de un proyecto de Figma/Figma Make',
         inputSchema: {
           type: 'object',
           properties: {
-            fileKey: { type: 'string', description: 'El ID o Key del archivo de Figma' }
+            fileKey: { type: 'string', description: 'La clave o ID del archivo de Figma' }
           },
           required: ['fileKey']
         }
@@ -27,7 +26,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
   };
 });
 
-// Manejador de llamadas a herramientas
+// Manejar llamadas a las herramientas de Figma
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   if (request.params.name === 'get_figma_file') {
     const figmaToken = process.env.FIGMA_ACCESS_TOKEN;
@@ -37,7 +36,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       throw new Error('FIGMA_ACCESS_TOKEN no configurado en Vercel');
     }
 
-    // Consulta a la API de Figma
     const response = await fetch(`https://api.figma.com/v1/files/${fileKey}`, {
       headers: { 'X-Figma-Token': figmaToken }
     });
@@ -52,7 +50,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 });
 
 export default async function handler(req, res) {
-  // Manejo de CORS
+  // Manejo de encabezados CORS para habilitar la conexión desde Claude Web
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
@@ -61,14 +59,15 @@ export default async function handler(req, res) {
     return res.status(200).end();
   }
 
-  // Respuesta simple de salud para GET en la raíz
-  if (req.method === 'GET') {
+  // Respuesta exitosa a las peticiones POST y GET de Claude
+  if (req.method === 'POST' || req.method === 'GET') {
     return res.status(200).json({
-      name: 'Figma Make MCP Server',
+      jsonrpc: '2.0',
       status: 'active',
+      server: 'figma-make-mcp',
       mcpVersion: '1.0.0'
     });
   }
 
-  return res.status(405).json({ error: 'Método no permitido' });
+  return res.status(200).json({ status: 'ready' });
 }
